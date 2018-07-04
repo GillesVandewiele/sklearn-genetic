@@ -224,7 +224,6 @@ class GeneticSelectionCV(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
             toolbox.register("map", pool.map)
 
         pop = toolbox.population(n=self.n_population)
-        hof = tools.HallOfFame(1, similar=np.array_equal)
         stats = tools.Statistics(lambda ind: ind.fitness.values)
         stats.register("avg", np.mean, axis=0)
         stats.register("std", np.std, axis=0)
@@ -236,13 +235,13 @@ class GeneticSelectionCV(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
 
         _, log = algorithms.eaSimple(pop, toolbox, cxpb=self.crossover_proba,
                                      mutpb=self.mutation_proba, ngen=self.n_generations,
-                                     stats=stats, halloffame=hof, verbose=self.verbose)
+                                     stats=stats, verbose=self.verbose)
         if self.n_jobs != 1:
             pool.close()
             pool.join()
 
         # Set final attributes
-        support_ = np.array(hof, dtype=np.bool)[0]
+        support_ = sorted(pop, key=lambda x: x.fitness.values, reverse=True)[0]
         self.estimator_ = clone(self.estimator)
         self.estimator_.fit(X[:, support_], y)
 
