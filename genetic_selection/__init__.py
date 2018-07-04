@@ -39,7 +39,8 @@ creator.create("Fitness", base.Fitness, weights=(1.0, -1.0))
 creator.create("Individual", list, fitness=creator.Fitness)
 
 
-def _evalFunction(individual, gaobject, estimator, X, y, cv, scorer, verbose, fit_params, caching):
+def _evalFunction(individual, gaobject, estimator, X, y, cv, scorer, verbose, 
+                  fit_params, caching):
     individual_sum = np.sum(individual, axis=0)
     if individual_sum == 0:
         return -10000, individual_sum
@@ -49,12 +50,13 @@ def _evalFunction(individual, gaobject, estimator, X, y, cv, scorer, verbose, fi
     X_selected = X[:, np.array(individual, dtype=np.bool)]
     scores = []
     for train, test in cv.split(X, y):
-        score = _fit_and_score(estimator=estimator, X=X_selected, y=y, scorer=scorer,
-                               train=train, test=test, verbose=verbose, parameters=None,
+        score = _fit_and_score(estimator=estimator, X=X_selected, y=y, 
+                               scorer=scorer, train=train, test=test, 
+                               verbose=verbose, parameters=None,
                                fit_params=fit_params)
         scores.append(score)
     scores_mean = np.mean(scores)
-    if caching:
+    if caching:   # TODO: This does not work (take shallow copy instead)
         gaobject.scores_cache[individual_tuple] = scores_mean
     return scores_mean, individual_sum
 
@@ -155,10 +157,12 @@ class GeneticSelectionCV(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
     array([ True  True  True  True False False False False False False False False
            False False False False False False False False False False False False], dtype=bool)
     """
-    def __init__(self, estimator, cv=None, scoring=None, fit_params=None, verbose=0, n_jobs=1,
-                 n_population=300, crossover_proba=0.5, mutation_proba=0.2, n_generations=40,
-                 crossover_independent_proba=0.1, mutation_independent_proba=0.05,
-                 tournament_size=3, caching=False):
+    def __init__(self, estimator, cv=None, scoring=None, fit_params=None, 
+                 verbose=0, n_jobs=1,  n_population=300, crossover_proba=0.5, 
+                 mutation_proba=0.2, n_generations=40, 
+                 crossover_independent_proba=0.1, 
+                 mutation_independent_proba=0.05,
+                 tournament_size=3, caching=True):
         self.estimator = estimator
         self.cv = cv
         self.scoring = scoring
@@ -180,8 +184,8 @@ class GeneticSelectionCV(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
         return self.estimator._estimator_type
 
     def fit(self, X, y):
-        """Fit the GeneticSelectionCV model and then the underlying estimator on the selected
-           features.
+        """Fit the GeneticSelectionCV model and then the underlying estimator 
+           on the selected features.
 
         Parameters
         ----------
@@ -209,12 +213,16 @@ class GeneticSelectionCV(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
         toolbox.register("individual", tools.initRepeat,
                          creator.Individual, toolbox.attr_bool, n=n_features)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-        toolbox.register("evaluate", _evalFunction, gaobject=self, estimator=estimator, X=X, y=y,
-                         cv=cv, scorer=scorer, verbose=self.verbose, fit_params=self.fit_params,
+        toolbox.register("evaluate", _evalFunction, gaobject=self, 
+                         estimator=estimator, X=X, y=y, cv=cv, scorer=scorer, 
+                         verbose=self.verbose, fit_params=self.fit_params,
                          caching=self.caching)
-        toolbox.register("mate", tools.cxUniform, indpb=self.crossover_independent_proba)
-        toolbox.register("mutate", tools.mutFlipBit, indpb=self.mutation_independent_proba)
-        toolbox.register("select", tools.selTournament, tournsize=self.tournament_size)
+        toolbox.register("mate", tools.cxUniform, 
+                         indpb=self.crossover_independent_proba)
+        toolbox.register("mutate", tools.mutFlipBit, 
+                         indpb=self.mutation_independent_proba)
+        toolbox.register("select", tools.selTournament, 
+                         tournsize=self.tournament_size)
 
         if self.n_jobs > 1:
             pool = multiprocessing.Pool(processes=self.n_jobs)
@@ -233,15 +241,18 @@ class GeneticSelectionCV(BaseEstimator, MetaEstimatorMixin, SelectorMixin):
         if self.verbose > 0:
             print("Selecting features with genetic algorithm.")
 
-        _, log = algorithms.eaSimple(pop, toolbox, cxpb=self.crossover_proba,
-                                     mutpb=self.mutation_proba, ngen=self.n_generations,
-                                     stats=stats, verbose=self.verbose)
+        pop, log = algorithms.eaSimple(pop, toolbox, 
+                                       cxpb=self.crossover_proba,
+                                       mutpb=self.mutation_proba, 
+                                       ngen=self.n_generations,
+                                       stats=stats, verbose=self.verbose)
         if self.n_jobs != 1:
             pool.close()
             pool.join()
 
         # Set final attributes
-        support_ = sorted(pop, key=lambda x: x.fitness.values, reverse=True)[0]
+        fittest = sorted(pop, key=lambda x: x.fitness.values, reverse=True)[0]
+        support_ = np.array(fittest, dtype=np.bool)
         self.estimator_ = clone(self.estimator)
         self.estimator_.fit(X[:, support_], y)
 
